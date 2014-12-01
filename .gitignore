@@ -1,5 +1,6 @@
 /target/*
 /project/*
+!/project/build.scala
 .DS_Store
 /grader/target/*
 /.idea

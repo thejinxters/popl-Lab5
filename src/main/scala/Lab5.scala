@@ -176,26 +176,50 @@ object Lab5 extends jsy.util.JsyApplication {
         }
         // Bind to env2 an environment that extends env1 with the parameters.
         val env2 = paramse match {
-          case Left(params) => throw new UnsupportedOperationException
-          case Right((mode,x,t)) => throw new UnsupportedOperationException
+          // Left side of join --> Params with (String, Type)
+          case Left(params) => params.foldLeft(env1) {
+            (newEnv, param) => param match {
+              case (f, rt) => newEnv + (f -> (MConst, rt) )
+              case _ => newEnv
+            }
+          }
+          // Right side of join --> Params with (PMode, String, Type)
+          case Right((mode,x,t)) => mode match{
+            // Pass by Name
+            case PName => env1 + ( x -> (MConst, t) )
+            // Pass by Ref or Var
+            case PRef | PVar =>  env1 + (x -> (MVar, t))
+          }
         }
         // Infer the type of the function body
         val t1 = typeInfer(env2, e1)
-        tann foreach { rt => if (rt != t1) err(t1, e1) };
+        tann foreach { rt => if (rt != t1) err(t1, e1) }
         TFunction(paramse, t1)
       }
 
       case Call(e1, args) => typ(e1) match {
-        case TFunction(Left(params), tret) if (params.length == args.length) => {
+        case TFunction(Left(params), tret) if params.length == args.length => {
+          //TypeCall --> check if each param type matches the arg type
           (params, args).zipped.foreach {
-            throw new UnsupportedOperationException
+            (x1,x2) => if (x1._2 != typ(x2)) err(typ(x2),x2) else typ(x2)
           }
           tret
         }
         case tgot @ TFunction(Right((mode,_,tparam)), tret) =>
-          throw new UnsupportedOperationException
+          mode match{
+            //TypeCallNameVar --> check against args(0) for argument types
+            case PName | PVar => if ( tparam == typ(args(0)) ) tret else err( typ(args(0)), args(0) )
+            //TypeCallRef --> us isLExp to determine if it is a lazy expression
+            case PRef if isLExpr(args(0)) => if ( tparam == typ(args(0)) ) tret else err( typ(args(0)), args(0) )
+            case _ => err(typ(args(0)), e1)
+          }
         case tgot => err(tgot, e1)
       }
+
+      case Decl(MConst, x, e1, e2) => throw new UnsupportedOperationException
+      case Decl(MVar, x, e1, e2) => throw new UnsupportedOperationException
+      case Assign(e1, e2) => throw new UnsupportedOperationException
+      case Unary(Cast(t1), e1) => throw new UnsupportedOperationException
 
       /*** Fill-in more cases here. ***/
 
