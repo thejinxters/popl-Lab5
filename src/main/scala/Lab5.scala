@@ -40,9 +40,9 @@ object Lab5 extends jsy.util.JsyApplication {
     case Nil => doreturn(l)
     case h :: t => f(h) match {
       // If not the chosen element recurse and return the DoWith list
-      case None => mapFirstWith(f)(t) map { x => h :: x}
+      case None => mapFirstWith(f)(t).map { x => h :: x}
       // If "chosen" then just map modified element into the original list and return
-      case Some(withhp) => withhp map (x => x :: t)
+      case Some(withhp) => withhp.map {x => x :: t}
     }
   }
 
@@ -50,8 +50,25 @@ object Lab5 extends jsy.util.JsyApplication {
 
   def castOk(t1: Typ, t2: Typ): Boolean = (t1, t2) match {
     case (TNull, TObj(_)) => true
-    case (_, _) if (t1 == t2) => true
-    case (TObj(fields1), TObj(fields2)) => throw new UnsupportedOperationException
+    case (_, _) if t1 == t2 => true
+    // Check if fields from First Object are the same type as fields from second object
+    case (TObj(fields1), TObj(fields2)) => {
+      //First check to see if all of field 1 is the same as field 2
+      val fields1ok = fields1 forall{
+        case (field, typ1) => fields2.get(field) match{
+          case Some(typ2) => if (castOk(typ1, typ2)) true else false
+          case None => true
+        }
+      }
+      //Then check to see if all of field 2 is the same as field 1
+      val fields2ok = fields2 forall{
+        case (field, typ1) => fields1.get(field) match{
+          case Some(typ2) => if (castOk(typ1, typ2)) true else false
+          case None => true
+        }
+      }
+      fields1ok && fields2ok
+    }
     case (TInterface(tvar, t1p), _) => castOk(typSubstitute(t1p, t1, tvar), t2)
     case (_, TInterface(tvar, t2p)) => castOk(t1, typSubstitute(t2p, t2, tvar))
     case _ => false
