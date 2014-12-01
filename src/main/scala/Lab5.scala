@@ -216,12 +216,19 @@ object Lab5 extends jsy.util.JsyApplication {
         case tgot => err(tgot, e1)
       }
 
-      case Decl(MConst, x, e1, e2) => throw new UnsupportedOperationException
-      case Decl(MVar, x, e1, e2) => throw new UnsupportedOperationException
-      case Assign(e1, e2) => throw new UnsupportedOperationException
-      case Unary(Cast(t1), e1) => throw new UnsupportedOperationException
+      // TypeDecl --> store var type in env and typeinfer on e2
+      case Decl(mut, x, e1, e2) => typeInfer(env + (x -> (mut, typ(e1))), e2)
+      case Assign(e1, e2) => e1 match {
+        //TypeAssignVar
+        case Var(x) if env.getOrElse(x,false) == MVar => if (typ(e1) == typ(e2)) typ(e1) else err(typ(e1), e1)
+        //TypeAssignField
+        case GetField(e3,f) => typ(e3) match {
+          case TObj(tfields) if tfields.contains(f) => if (tfields(f) == typ(e2)) typ(e2) else err(typ(e2), e2)
+          case tgot => err(tgot, e1)
+        }
+      }
+      case Unary(Cast(t1), e1) => if (castOk(typ(e1), t1)) t1 else err(typ(e1), e1)
 
-      /*** Fill-in more cases here. ***/
 
       /* Should not match: non-source expressions or should have been removed */
       case A(_) | Unary(Deref, _) | InterfaceDecl(_, _, _) => throw new IllegalArgumentException("Gremlins: Encountered unexpected expression %s.".format(e))
