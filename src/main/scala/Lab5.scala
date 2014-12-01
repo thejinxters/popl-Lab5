@@ -92,6 +92,7 @@ object Lab5 extends jsy.util.JsyApplication {
     def err[T](tgot: Typ, e1: Expr): T = throw new StaticTypeError(tgot, e1, e)
 
     e match {
+      case Null => TNull
       case Print(e1) => typ(e1); TUndefined
       case N(_) => TNumber
       case B(_) => TBool
@@ -205,13 +206,13 @@ object Lab5 extends jsy.util.JsyApplication {
           }
           tret
         }
-        case tgot @ TFunction(Right((mode,_,tparam)), tret) =>
+        case tgot @ TFunction(Right((mode,_,tparam)), tret) if (args.length == 1) =>
           mode match{
             //TypeCallNameVar --> check against args(0) for argument types
             case PName | PVar => if ( tparam == typ(args(0)) ) tret else err( typ(args(0)), args(0) )
             //TypeCallRef --> us isLExp to determine if it is a lazy expression
             case PRef if isLExpr(args(0)) => if ( tparam == typ(args(0)) ) tret else err( typ(args(0)), args(0) )
-            case _ => err(typ(args(0)), e1)
+            case _ => err(tgot, e1)
           }
         case tgot => err(tgot, e1)
       }
@@ -220,12 +221,13 @@ object Lab5 extends jsy.util.JsyApplication {
       case Decl(mut, x, e1, e2) => typeInfer(env + (x -> (mut, typ(e1))), e2)
       case Assign(e1, e2) => e1 match {
         //TypeAssignVar
-        case Var(x) if env.getOrElse(x,false) == MVar => if (typ(e1) == typ(e2)) typ(e1) else err(typ(e1), e1)
+        case Var(x) if (env(x)._1 == MVar) => if (typ(e1) == typ(e2)) typ(e1) else err(typ(e1), e1)
         //TypeAssignField
         case GetField(e3,f) => typ(e3) match {
           case TObj(tfields) if tfields.contains(f) => if (tfields(f) == typ(e2)) typ(e2) else err(typ(e2), e2)
           case tgot => err(tgot, e1)
         }
+        case tgot => err(typ(tgot), e1)
       }
       case Unary(Cast(t1), e1) => if (castOk(typ(e1), t1)) t1 else err(typ(e1), e1)
 
@@ -261,7 +263,8 @@ object Lab5 extends jsy.util.JsyApplication {
   /* Capture-avoiding substitution in e replacing variables x with esub. */
   def substitute(e: Expr, esub: Expr, x: String): Expr = {
     def subst(e: Expr): Expr = substitute(e, esub, x)
-    val ep: Expr = throw new UnsupportedOperationException
+    // Call avoid capture to avoid capturing free variables
+    val ep: Expr = avoidCapture(freeVars(esub), e)
     ep match {
       case N(_) | B(_) | Undefined | S(_) | Null | A(_) => e
       case Print(e1) => Print(subst(e1))
