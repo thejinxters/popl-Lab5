@@ -42,7 +42,7 @@ object Lab5 extends jsy.util.JsyApplication {
       // If not the chosen element recurse and return the DoWith list
       case None => mapFirstWith(f)(t).map { x => h :: x}
       // If "chosen" then just map modified element into the original list and return
-      case Some(withhp) => withhp.map {x => x :: t}
+      case Some(withhp) => for (x <- withhp) yield x::t  //withhp.map {x => x :: t}
     }
   }
 

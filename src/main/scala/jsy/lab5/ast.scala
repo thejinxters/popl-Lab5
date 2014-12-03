@@ -143,6 +143,7 @@ object ast {
     def get(key: A): Option[Expr] = map.get(key)
     def +(kv: (A, Expr)): Mem = new Mem(map + kv, nextAddr)
     def contains(key: A): Boolean = map.contains(key)
+    def isEmpty = map.isEmpty
     
     private def alloc(v: Expr): (Mem, A) = {
       val fresha = A(nextAddr)
@@ -171,8 +172,8 @@ object ast {
   
   def isLExpr(e: Expr): Boolean = e match {
     case Var(_) | GetField(_, _) => true
-    case _ => false
-  }
+  case _ => false
+}
   
   def isLValue(e: Expr): Boolean = e match {
     case Unary(Deref, A(_)) | GetField(A(_), _) => true
