@@ -40,9 +40,9 @@ object Lab5 extends jsy.util.JsyApplication {
     case Nil => doreturn(l)
     case h :: t => f(h) match {
       // If not the chosen element recurse and return the DoWith list
-      case None => mapFirstWith(f)(t) map { x => h :: x}
+      case None => mapFirstWith(f)(t).map { x => h :: x}
       // If "chosen" then just map modified element into the original list and return
-      case Some(withhp) => withhp map (x => x :: t)
+      case Some(withhp) => for (x <- withhp) yield x::t  //withhp.map {x => x :: t}
     }
   }
 
@@ -50,8 +50,25 @@ object Lab5 extends jsy.util.JsyApplication {
 
   def castOk(t1: Typ, t2: Typ): Boolean = (t1, t2) match {
     case (TNull, TObj(_)) => true
-    case (_, _) if (t1 == t2) => true
-    case (TObj(fields1), TObj(fields2)) => throw new UnsupportedOperationException
+    case (_, _) if t1 == t2 => true
+    // Check if fields from First Object are the same type as fields from second object
+    case (TObj(fields1), TObj(fields2)) => {
+      //First check to see if all of field 1 is the same as field 2
+      val fields1ok = fields1 forall{
+        case (field, typ1) => fields2.get(field) match{
+          case Some(typ2) => if (castOk(typ1, typ2)) true else false
+          case None => true
+        }
+      }
+      //Then check to see if all of field 2 is the same as field 1
+      val fields2ok = fields2 forall{
+        case (field, typ1) => fields1.get(field) match{
+          case Some(typ2) => if (castOk(typ1, typ2)) true else false
+          case None => true
+        }
+      }
+      fields1ok && fields2ok
+    }
     case (TInterface(tvar, t1p), _) => castOk(typSubstitute(t1p, t1, tvar), t2)
     case (_, TInterface(tvar, t2p)) => castOk(t1, typSubstitute(t2p, t2, tvar))
     case _ => false
@@ -75,6 +92,7 @@ object Lab5 extends jsy.util.JsyApplication {
     def err[T](tgot: Typ, e1: Expr): T = throw new StaticTypeError(tgot, e1, e)
 
     e match {
+      case Null => TNull
       case Print(e1) => typ(e1); TUndefined
       case N(_) => TNumber
       case B(_) => TBool
@@ -159,28 +177,60 @@ object Lab5 extends jsy.util.JsyApplication {
         }
         // Bind to env2 an environment that extends env1 with the parameters.
         val env2 = paramse match {
-          case Left(params) => throw new UnsupportedOperationException
-          case Right((mode,x,t)) => throw new UnsupportedOperationException
+          // Left side of join --> Params with (String, Type)
+          case Left(params) => params.foldLeft(env1) {
+            (newEnv, param) => param match {
+              case (f, rt) => newEnv + (f -> (MConst, rt) )
+              case _ => newEnv
+            }
+          }
+          // Right side of join --> Params with (PMode, String, Type)
+          case Right((mode,x,t)) => mode match{
+            // Pass by Name
+            case PName => env1 + ( x -> (MConst, t) )
+            // Pass by Ref or Var
+            case PRef | PVar =>  env1 + (x -> (MVar, t))
+          }
         }
         // Infer the type of the function body
         val t1 = typeInfer(env2, e1)
-        tann foreach { rt => if (rt != t1) err(t1, e1) };
+        tann foreach { rt => if (rt != t1) err(t1, e1) }
         TFunction(paramse, t1)
       }
 
       case Call(e1, args) => typ(e1) match {
-        case TFunction(Left(params), tret) if (params.length == args.length) => {
+        case TFunction(Left(params), tret) if params.length == args.length => {
+          //TypeCall --> check if each param type matches the arg type
           (params, args).zipped.foreach {
-            throw new UnsupportedOperationException
+            (x1,x2) => if (x1._2 != typ(x2)) err(typ(x2),x2) else typ(x2)
           }
           tret
         }
-        case tgot @ TFunction(Right((mode,_,tparam)), tret) =>
-          throw new UnsupportedOperationException
+        case tgot @ TFunction(Right((mode,_,tparam)), tret) if (args.length == 1) =>
+          mode match{
+            //TypeCallNameVar --> check against args(0) for argument types
+            case PName | PVar => if ( tparam == typ(args(0)) ) tret else err( typ(args(0)), args(0) )
+            //TypeCallRef --> us isLExp to determine if it is a lazy expression
+            case PRef if isLExpr(args(0)) => if ( tparam == typ(args(0)) ) tret else err( typ(args(0)), args(0) )
+            case _ => err(tgot, e1)
+          }
         case tgot => err(tgot, e1)
       }
 
-      /*** Fill-in more cases here. ***/
+      // TypeDecl --> store var type in env and typeinfer on e2
+      case Decl(mut, x, e1, e2) => typeInfer(env + (x -> (mut, typ(e1))), e2)
+      case Assign(e1, e2) => e1 match {
+        //TypeAssignVar
+        case Var(x) if (env(x)._1 == MVar) => if (typ(e1) == typ(e2)) typ(e1) else err(typ(e1), e1)
+        //TypeAssignField
+        case GetField(e3,f) => typ(e3) match {
+          case TObj(tfields) if tfields.contains(f) => if (tfields(f) == typ(e2)) typ(e2) else err(typ(e2), e2)
+          case tgot => err(tgot, e1)
+        }
+        case tgot => err(typ(tgot), e1)
+      }
+      case Unary(Cast(t1), e1) => if (castOk(typ(e1), t1)) t1 else err(typ(e1), e1)
+
 
       /* Should not match: non-source expressions or should have been removed */
       case A(_) | Unary(Deref, _) | InterfaceDecl(_, _, _) => throw new IllegalArgumentException("Gremlins: Encountered unexpected expression %s.".format(e))
@@ -213,7 +263,8 @@ object Lab5 extends jsy.util.JsyApplication {
   /* Capture-avoiding substitution in e replacing variables x with esub. */
   def substitute(e: Expr, esub: Expr, x: String): Expr = {
     def subst(e: Expr): Expr = substitute(e, esub, x)
-    val ep: Expr = throw new UnsupportedOperationException
+    // Call avoid capture to avoid capturing free variables
+    val ep: Expr = avoidCapture(freeVars(esub), e)
     ep match {
       case N(_) | B(_) | Undefined | S(_) | Null | A(_) => e
       case Print(e1) => Print(subst(e1))
