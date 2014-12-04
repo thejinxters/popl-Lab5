@@ -40,7 +40,7 @@ object Lab5 extends jsy.util.JsyApplication {
     case Nil => doreturn(l)
     case h :: t => f(h) match {
       // If not the chosen element recurse and return the DoWith list
-      case None => mapFirstWith(f)(t).map { x => h :: x}
+      case None =>  for (x <- mapFirstWith(f)(t)) yield h :: x
       // If "chosen" then just map modified element into the original list and return
       case Some(withhp) => for (x <- withhp) yield x::t  //withhp.map {x => x :: t}
     }
@@ -273,8 +273,29 @@ object Lab5 extends jsy.util.JsyApplication {
       case If(e1, e2, e3) => If(subst(e1), subst(e2), subst(e3))
       case Var(y) => if (x == y) esub else e
       case Decl(mut, y, e1, e2) => Decl(mut, y, subst(e1), if (x == y) e2 else subst(e2))
+      
       case Function(p, paramse, retty, e1) =>
-        throw new UnsupportedOperationException
+        paramse match {
+          case Left(params) => val e1p = params.foldLeft(e1) {
+            (e1new, param) => param match {
+              case (pname, ptype) =>
+                if (pname != x && p != Some(x))
+                  substitute(e1new, esub, x)
+                else 
+                  e1new
+            }
+          }
+          Function(p, Left(params), retty, e1p)
+        case Right((pmode, pname, ptype)) =>
+          val e1p = {
+            if (pname != x && p != Some(x))
+              substitute(e1, esub, x)
+            else 
+              e1
+          }
+          Function(p, Right((pmode, pname, ptype)), retty, e1p)
+        }
+      
       case Call(e1, args) => Call(subst(e1), args map subst)
       case Obj(fields) => Obj(fields map { case (fi,ei) => (fi, subst(ei)) })
       case GetField(e1, f) => GetField(subst(e1), f)
@@ -317,9 +338,18 @@ object Lab5 extends jsy.util.JsyApplication {
       case Binary(Div, N(n1), N(n2)) => doreturn( N(n1 / n2) )
       case If(B(b1), e2, e3) => doreturn( if (b1) e2 else e3 )
       case Obj(fields) if (fields forall { case (_, vi) => isValue(vi)}) =>
-        throw new UnsupportedOperationException
+        Mem.alloc(e) map { (a: A) => a:Expr}
       case GetField(a @ A(_), f) =>
-        throw new UnsupportedOperationException
+         doget map { (m: Mem) =>
+           m.get(a) match {
+             case Some(Obj(fields)) => fields.get(f) match {
+               case Some(v) => v
+               case _ => throw new UnsupportedOperationException
+             }
+               case _ => throw new UnsupportedOperationException
+          }
+        }
+
 
       case Call(v1, args) if isValue(v1) =>
         def substfun(e1: Expr, p: Option[String]): Expr = p match {
@@ -327,8 +357,52 @@ object Lab5 extends jsy.util.JsyApplication {
           case Some(x) => substitute(e1, v1, x)
         }
         (v1, args) match {
+          case Function(p, Left(params), _, e1) => {
+            val e1p = (params, args).zipped.foldRight(e1) {
+              (param, e1new) =>
+              param match {
+                case ((pname, ptype), arg) =>
+                  substitute(e1new, arg, pname)
+              }
+            }
+            p match {
+              case None => doreturn(e1p)
+              case Some(funcName) =>
+                doreturn(substitute(e1p, v1, funcName))
+            }
+          }
           /*** Fill-in the DoCall cases, the SearchCall2, the SearchCallVar, the SearchCallRef  ***/
           case _ => throw StuckError(e)
+        }
+        case (Function(p, Right((PVar, x, _)), _, e1), v2 :: Nil) =>
+          v2 match {
+            case Unary(Deref, a: A) =>
+              doget map { (m: Mem) => m(a) } flatMap {
+                newv2 =>
+                  Mem.alloc(newv2) map { a => substfun(substitute(e1, Unary(Deref, a), x), p) }
+              }
+            case _ =>
+              Mem.alloc(v2) map { a => substfun(substitute(e1, Unary(Deref, a), x), p) }
+          }
+
+          //DoCallRef and DoCallRefRec
+          case (Function(p, Right((PRef, x1, _)), _, e1), lv2 :: Nil) if isLValue(lv2) => {
+            println("matched doCallRef")
+            val e1p = substitute(e1, lv2, x1)
+            val e1pp = substfun(e1p, p)
+            doreturn(e1pp)
+
+          }
+
+          //DoCallName and DoCallNameRec
+          case (Function(p, Right((PName, x1, _)), _, e1), e2 :: Nil) =>
+            doreturn(substfun(substitute(e1, e2, x1), p))
+
+          case (a @ _, b :: Nil) =>
+            println("about to throw stuck")
+            println("a: " + a)
+            println("b: " + b)
+            throw StuckError(e)
         }
 
       case Decl(MConst, x, v1, e2) if isValue(v1) =>
