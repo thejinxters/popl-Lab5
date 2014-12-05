@@ -379,15 +379,32 @@ object Lab5 extends jsy.util.JsyApplication {
           case _ => throw StuckError(e)
         }
 
+      // DoConst
       case Decl(MConst, x, v1, e2) if isValue(v1) =>
-        throw new UnsupportedOperationException
+        doreturn(substitute(e2, v1, x))
+      // DoVar
       case Decl(MVar, x, v1, e2) if isValue(v1) =>
-        throw new UnsupportedOperationException
+        Mem.alloc(v1) map { a => substitute(e2, Unary(Deref,a), x)}
 
+      //DoAsignVar
       case Assign(Unary(Deref, a @ A(_)), v) if isValue(v) =>
         for (_ <- domodify { (m: Mem) => (throw new UnsupportedOperationException): Mem }) yield v
 
-      /*** Fill-in more Do cases here. ***/
+      // DoAssignField
+      case Assign(GetField(obj,f), v) if isValue(v) => throw new UnsupportedOperationException
+
+      // DoDeref
+      case Unary(Deref, a @ A(_)) => throw new UnsupportedOperationException
+
+      // DocastNull
+      case Unary(Cast(t), Null) => doreturn( Null )
+
+      // DoCastObj
+      case Unary(Cast(TObj(tfields)), a @ A(_)) => throw new UnsupportedOperationException
+
+      // DoCast
+      case Unary(Cast(t), v) if isValue(v) => throw new UnsupportedOperationException
+
 
       /* Base Cases: Error Rules */
       /*** Fill-in cases here. ***/
@@ -409,6 +426,14 @@ object Lab5 extends jsy.util.JsyApplication {
         case None => throw StuckError(e)
       }
       case GetField(e1, f) => throw new UnsupportedOperationException
+
+      case Call(e1, args) => throw new UnsupportedOperationException
+
+      case Decl(mut, x, e1, e2) => throw new UnsupportedOperationException
+
+      case Assign(e1, e2) if (!isLValue(e1)) => throw new UnsupportedOperationException
+
+      case Assign(e1, e2) => throw new UnsupportedOperationException
 
       /*** Fill-in more Search cases here. ***/
 
