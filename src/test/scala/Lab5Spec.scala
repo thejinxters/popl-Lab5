@@ -119,16 +119,10 @@ class Lab5Spec extends FlatSpec {
   }
 
   "DoConst" should "declare a constant" in {
-//    val e = Decl(MConst, "x", N(42), Var("x"))
-//    val (mp: Mem, ep: Expr) = step(e)(Mem.empty)
-//    assert(ep match {
-//      case Unary(Deref, a@A(_)) =>
-//        // Verify memory correctly references N(42)
-//        mp.get(a).get == N(42)
-//      case _ => false
-//    })
+    val e = Decl(MConst, "x", N(42), Var("x"))
+    val (mp: Mem, ep: Expr) = step(e)(Mem.empty)
+    assertResult(N(42)) { ep }
   }
-
 
   "Do Var" should "assign a var to mem" in {
     val e = Decl(MVar, "x", N(42), Var("x"))
