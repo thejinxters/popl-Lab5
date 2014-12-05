@@ -405,15 +405,8 @@ object Lab5 extends jsy.util.JsyApplication {
       // DoDeref
       case Unary(Deref, a @ A(_)) => doget map { (m:Mem) => m.get(a) get }
 
-      // DocastNull
-      case Unary(Cast(t), Null) => doreturn( Null )
-
-      // DoCastObj
-      case Unary(Cast(TObj(tfields)), a @ A(_)) => throw new UnsupportedOperationException
-
       // DoCast
       case Unary(Cast(t), v) if isValue(v) => doreturn(v)
-
 
       /* Base Cases: Error Rules */
       /*** Fill-in cases here. ***/
