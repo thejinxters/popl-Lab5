@@ -274,7 +274,15 @@ object Lab5 extends jsy.util.JsyApplication {
       case Var(y) => if (x == y) esub else e
       case Decl(mut, y, e1, e2) => Decl(mut, y, subst(e1), if (x == y) e2 else subst(e2))
       case Function(p, paramse, retty, e1) =>
-        throw new UnsupportedOperationException
+        if (p == Some(x)) return ep
+        paramse match {
+          case Left(params) =>
+            // forall returns true if each param is not x
+            val subOk = params forall { case (pname,typ) => pname != x }
+            if (subOk) Function(p,paramse,retty,substitute(e1, esub, x)) else ep
+          case Right((mode, pname, typ)) =>
+            if (x != pname) Function(p,paramse,retty,substitute(e1, esub, x)) else ep
+        }
       case Call(e1, args) => Call(subst(e1), args map subst)
       case Obj(fields) => Obj(fields map { case (fi,ei) => (fi, subst(ei)) })
       case GetField(e1, f) => GetField(subst(e1), f)
@@ -317,9 +325,17 @@ object Lab5 extends jsy.util.JsyApplication {
       case Binary(Div, N(n1), N(n2)) => doreturn( N(n1 / n2) )
       case If(B(b1), e2, e3) => doreturn( if (b1) e2 else e3 )
       case Obj(fields) if (fields forall { case (_, vi) => isValue(vi)}) =>
-        throw new UnsupportedOperationException
+        for (a <- Mem.alloc(e)) yield a
       case GetField(a @ A(_), f) =>
-        throw new UnsupportedOperationException
+        // doget grabs memory, then search memory with mem.get(a) returning an Option
+        for (mem <- doget) yield mem.get(a)  match {
+            // Check to see if fields exist
+            case Some(Obj(fields)) => fields.get(f) match{
+              case Some(a) => a
+              case None => throw StuckError(e)
+          }
+          case None => throw StuckError(e)
+        }
 
       case Call(v1, args) if isValue(v1) =>
         def substfun(e1: Expr, p: Option[String]): Expr = p match {
@@ -328,6 +344,38 @@ object Lab5 extends jsy.util.JsyApplication {
         }
         (v1, args) match {
           /*** Fill-in the DoCall cases, the SearchCall2, the SearchCallVar, the SearchCallRef  ***/
+
+          case (Function(p,paramse,tann,e1),args)=> paramse match{
+            //DoCall -- if normal function
+            case Left(params) if params.length == args.length =>
+              val e1p = (params, args).zipped.foldLeft(e1) {
+                (acc, param) => param match {
+                  case ((pname, ptype),arg) => substitute(acc, arg, pname)
+                }
+              }
+              p match {
+                // DoCall (anonymous not recursive)
+                case None => doreturn(e1p)
+                // DoCallRec (sub in function).
+                case Some(name) => doreturn(substitute(e1p, v1, name))
+              }
+            case Right((pmode, pname, ptype)) if args.length == 1 => pmode match{
+              // DoCallName -- pass by name
+              case PName if args.head != Nil =>
+                doreturn(substfun(substitute(e1, args.head, pname), p))
+              // DoCallVar -- pass by value
+              case PVar if isValue(args.head) =>
+                Mem.alloc(args.head) map { a => substfun(substitute(e1, Unary(Deref,a), pname),p)}
+              // DoCallRef -- pass by ref
+              case PRef if isLValue(args.head) =>
+                doreturn(substfun(substitute(e1, args.head, pname), p))
+              // SearchCallVar and SearchCallRef
+              case PVar | PRef => step(args.head) map { e2 => Call(v1, e2 :: Nil) }
+
+              case _ => throw StuckError(e)
+            }
+            case _ => throw StuckError(e)
+          }
           case _ => throw StuckError(e)
         }
 
