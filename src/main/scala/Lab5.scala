@@ -431,18 +431,23 @@ object Lab5 extends jsy.util.JsyApplication {
         for (e1p <- step(e1)) yield If(e1p, e2, e3)
       case Obj(fields) => fields find { case (_, ei) => !isValue(ei) } match {
         case Some((fi,ei)) =>
-          throw new UnsupportedOperationException
+          for (eip <- step(ei)) yield Obj(fields + (fi -> eip))
         case None => throw StuckError(e)
       }
-      case GetField(e1, f) => throw new UnsupportedOperationException
+      case GetField(e1, f) =>
+        for (e1p <- step(e1)) yield GetField(e1p,f)
 
-      case Call(e1, args) => throw new UnsupportedOperationException
+      case Call(e1, args) =>
+        for (e1p <- step(e1)) yield Call(e1p, args)
 
-      case Decl(mut, x, e1, e2) => throw new UnsupportedOperationException
+      case Decl(mut, x, e1, e2) =>
+        for (e1p <- step(e1)) yield Decl(mut, x, e1p, e2)
 
-      case Assign(e1, e2) if (!isLValue(e1)) => throw new UnsupportedOperationException
+      case Assign(e1, e2) if (!isLValue(e1)) =>
+        for (e1p <- step(e1)) yield Assign(e1p, e2)
 
-      case Assign(e1, e2) => throw new UnsupportedOperationException
+      case Assign(e1, e2) if isLValue(e1) =>
+        for (e2p <- step(e2)) yield Assign(e1, e2p)
 
       /*** Fill-in more Search cases here. ***/
 
