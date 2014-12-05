@@ -329,12 +329,12 @@ object Lab5 extends jsy.util.JsyApplication {
       case GetField(a @ A(_), f) =>
         // doget grabs memory, then search memory with mem.get(a) returning an Option
         for (mem <- doget) yield mem.get(a)  match {
-            // Check to see if fields exist
-            case Some(Obj(fields)) => fields.get(f) match{
-              case Some(a) => a
-              case None => throw StuckError(e)
+          // Check to see if fields exist
+          case Some(Obj(fields)) => fields.get(f) match{
+            case Some(a) => a
+            case None => throw StuckError(e)
           }
-          case None => throw StuckError(e)
+          case _ => throw StuckError(e)
         }
 
       case Call(v1, args) if isValue(v1) =>
@@ -388,13 +388,22 @@ object Lab5 extends jsy.util.JsyApplication {
 
       //DoAsignVar
       case Assign(Unary(Deref, a @ A(_)), v) if isValue(v) =>
-        for (_ <- domodify { (m: Mem) => (throw new UnsupportedOperationException): Mem }) yield v
+        for (_ <- domodify { (m: Mem) => (m + (a , v)): Mem }) yield v
 
       // DoAssignField
-      case Assign(GetField(obj,f), v) if isValue(v) => throw new UnsupportedOperationException
+      case Assign(GetField(a @ A(_),f), v) if isValue(v) =>
+        for (_ <- domodify { (m: Mem) =>
+          // Create a new object to store field in
+          val newObj = m.get(a) match {
+            case Some(Obj(fields)) => Obj(fields + (f -> v))
+            case _ => throw StuckError(e)
+          }
+          // assign new object to memory location 'a'
+          m + (a, newObj)
+        }) yield v
 
       // DoDeref
-      case Unary(Deref, a @ A(_)) => throw new UnsupportedOperationException
+      case Unary(Deref, a @ A(_)) => doget map { (m:Mem) => m.get(a) get }
 
       // DocastNull
       case Unary(Cast(t), Null) => doreturn( Null )
@@ -403,7 +412,7 @@ object Lab5 extends jsy.util.JsyApplication {
       case Unary(Cast(TObj(tfields)), a @ A(_)) => throw new UnsupportedOperationException
 
       // DoCast
-      case Unary(Cast(t), v) if isValue(v) => throw new UnsupportedOperationException
+      case Unary(Cast(t), v) if isValue(v) => doreturn(v)
 
 
       /* Base Cases: Error Rules */
