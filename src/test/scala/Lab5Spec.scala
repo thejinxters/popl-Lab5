@@ -71,7 +71,10 @@ class Lab5Spec extends FlatSpec {
   }
 
   "DoArith" should "add two numbers" in {
-
+    val x = Binary(Seq, N(1), Binary(Plus, N(5), N(8)))
+    val(mp:Mem, ep:Expr) = step(e)(Mem.empty) 
+    assert(mp.isEmpty)
+    assertResult(Binary(Plus, N(5), N(8))) {ep}
   }
 
   "DoPlusString" should "add two strings" in {
@@ -107,7 +110,9 @@ class Lab5Spec extends FlatSpec {
   }
 
   "DoObject" should "access an object in memory" in {
-
+    val e = Obj(Map("a" -> N(5), "b" -> N(7)))
+    val (mp:Mem, a: A) = step(e)(Mem.empty)
+    assertResult(e) { mp.get(a).get }
   }
 
   "DoGetField" should "access a field from an object in memory" in {
