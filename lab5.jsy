@@ -1,3 +1,44 @@
-var x = 3
-{a :(x = 10)}
- x
+/*
+ * Test jsy file
+ */
+var a = 1;
+console.log(a);
+
+var x = 1;
+var y = 2;
+var z = x + y;
+console.log(z);
+
+function (arg1: number, arg2: string) { return 1 }(1, 'asdf')
+
+interface testObj {n:number; b:bool}
+var testVar = {n:5, b: null}
+
+var x = 1
+const double = function(var num: number) {
+   return num = num + num;
+}
+
+console.log("Print function double of 2 plus double of 2:")
+console.log(double(x) + double(x))
+
+var x = null;
+var xobj = <testObj> x;
+
+console.log("Print casted null object:")
+console.log(xobj)
+
+var orig_obj = {a:6, b: "object string", c: true}
+interface new_obj_type {a:number; b: string}
+var new_obj = <new_obj_type> orig_obj
+
+console.log("Print casted object:")
+console.log(new_obj)
+
+
+var changeObj = { n : 3, b : false }
+
+changeObj.n = 6;
+
+console.log("Print object with num changed to 6:")
+console.log(changeObj);
